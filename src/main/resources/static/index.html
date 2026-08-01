@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Club Projects · Workspace</title>
+  <meta name="description" content="Plan, track and report every club project in one place.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%236366f1'/><text x='16' y='22' font-size='15' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>L</text></svg>">
+</head>
+<body>
+
+<!-- soft background glow -->
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<header class="topbar">
+  <div class="shell topbar__in">
+    <button class="brand" id="brandBtn" type="button">
+      <span class="brand__mark">LC</span>
+      <span class="brand__text">
+        <strong>Club Projects</strong>
+        <small>Leo workspace · 2026/27</small>
+      </span>
+    </button>
+
+    <div class="topbar__actions">
+      <span class="savepill" id="savePill" role="status" aria-live="polite"></span>
+
+      <button class="btn btn--icon" id="themeBtn" type="button" title="Switch theme" aria-label="Switch theme">
+        <svg class="i i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.2 12H2M22 12h-2.2M6.2 6.2 4.7 4.7M19.3 19.3l-1.5-1.5M17.8 6.2l1.5-1.5M4.7 19.3l1.5-1.5"/></svg>
+        <svg class="i i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z"/></svg>
+      </button>
+
+      <button class="btn" id="exportBtn" type="button">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11m0 0 4-4m-4 4-4-4"/><path d="M4.5 16.5v2a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2"/></svg>
+        <span class="btn__label">Copy for Sheets</span>
+      </button>
+
+      <button class="btn btn--primary" id="newBtn" type="button">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>
+        <span class="btn__label">New project</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ═══════════════════ HOME ═══════════════════ -->
+  <section class="view view--on" id="viewHome">
+    <div class="shell">
+
+      <div class="hero">
+        <span class="eyebrow">Season 2026 / 27</span>
+        <h1>Every club project,<br><em>one workspace.</em></h1>
+        <p id="heroLine">Loading your projects…</p>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="toolbar">
+        <label class="search">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/></svg>
+          <input id="search" type="search" placeholder="Search projects, members, venues…" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="chips" id="filters" role="tablist" aria-label="Filter by status"></div>
+      </div>
+
+      <div id="board" class="board"></div>
+
+      <section class="panel committee">
+        <div class="panel__head">
+          <h2>Committee</h2>
+          <span class="tag" id="memberCount"></span>
+          <button class="btn btn--sm" id="addMemberBtn" type="button">
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>
+            Add member
+          </button>
+        </div>
+
+        <form class="memberform" id="memberForm" hidden>
+          <input id="memberName" type="text" placeholder="Full name" maxlength="80" autocomplete="off" aria-label="New member name">
+          <button class="btn btn--primary btn--sm" type="submit">Add</button>
+          <button class="btn btn--sm" type="button" id="cancelMemberBtn">Cancel</button>
+        </form>
+
+        <div class="people" id="members"></div>
+      </section>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════ DETAIL ═══════════════════ -->
+  <section class="view" id="viewDetail">
+    <div class="shell">
+      <button class="linkback" id="backBtn" type="button">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg>
+        All projects
+      </button>
+
+      <div class="detail__head">
+        <div class="detail__titlerow">
+          <div class="thumb" id="thumb">
+            <button class="thumb__drop" id="thumbBtn" type="button" aria-label="Add a photo for this project">
+              <img id="thumbImg" alt="" hidden>
+              <span class="thumb__empty" id="thumbEmpty">
+                <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="14" rx="3"/><circle cx="9" cy="10.5" r="1.8"/><path d="m4.5 17 4.2-4.2a2 2 0 0 1 2.8 0L16 17.5m1.6-2.1a1.8 1.8 0 0 1 2.5 0l.4.4"/></svg>
+                <span>Add photo</span>
+              </span>
+            </button>
+            <button class="thumb__x" id="thumbRemove" type="button" hidden aria-label="Remove this photo">
+              <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+            <input type="file" id="thumbInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+          </div>
+
+          <div class="detail__titlecol">
+            <textarea id="pName" class="titlefield" rows="1" placeholder="Name this project" aria-label="Project name"></textarea>
+            <p class="detail__hint">Click any field to edit — everything saves by itself. Drop a photo on the tile to change it.</p>
+          </div>
+          <span class="badge" id="pBadge"></span>
+        </div>
+
+        <div class="detail__controls">
+          <div class="segmented" id="statusSeg" role="group" aria-label="Project status"></div>
+          <div class="progress-control">
+            <div class="progress-control__head">
+              <span class="progress-control__label">Record completeness</span>
+              <output class="mono" id="pPct" for="detailBody">0%</output>
+            </div>
+            <span class="pmeter"><i id="pFill"></i></span>
+            <span class="progress-control__count" id="pCount"></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="detailBody"></div>
+    </div>
+
+    <div class="actionbar" id="detailBar">
+      <div class="shell actionbar__in">
+        <button class="btn btn--primary" id="saveBtn" type="button">Save &amp; close</button>
+        <button class="btn btn--danger" id="deleteBtn" type="button">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V5.4a1.4 1.4 0 0 1 1.4-1.4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.8 11.6A1.6 1.6 0 0 0 8.9 20h6.2a1.6 1.6 0 0 0 1.6-1.4L17.5 7"/></svg>
+          <span class="btn__label">Delete</span>
+        </button>
+        <span class="actionbar__note" id="syncNote">All changes saved automatically</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ ADMIN ═══════════════════ -->
+  <section class="view" id="viewAdmin">
+    <div class="shell">
+      <button class="linkback" id="adminBack" type="button">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg>
+        All projects
+      </button>
+
+      <div class="adminhead">
+        <div>
+          <span class="eyebrow">Restricted</span>
+          <h1>Admin panel</h1>
+          <p>Anyone can add and edit. Removing things happens here.</p>
+        </div>
+        <button class="btn" id="adminLogout" type="button">Sign out</button>
+      </div>
+
+      <section class="panel">
+        <div class="panel__head">
+          <h2>Projects</h2>
+          <span class="tag" id="adminProjectCount"></span>
+        </div>
+        <div class="adminlist" id="adminProjects"></div>
+      </section>
+
+      <section class="panel committee">
+        <div class="panel__head">
+          <h2>Committee</h2>
+          <span class="tag" id="adminMemberCount"></span>
+        </div>
+        <div class="people" id="adminMembers"></div>
+      </section>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Confirmation prompt. A real element rather than window.confirm(), which
+     some browsers suppress outright and none of them let you style. -->
+<dialog class="modal" id="confirmModal" aria-labelledby="confirmTitle">
+  <form method="dialog" class="modal__box">
+    <h2 class="modal__title" id="confirmTitle"></h2>
+    <p class="modal__text" id="confirmText"></p>
+    <p class="modal__note" id="confirmNote" hidden></p>
+    <div class="modal__actions">
+      <button class="btn" type="submit" value="cancel" id="confirmCancel">Cancel</button>
+      <button class="btn btn--solid-danger" type="submit" value="ok" id="confirmOk">Remove</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Admin sign-in. Reached at #/admin, or by clicking the club badge five times. -->
+<dialog class="modal" id="adminModal" aria-labelledby="adminModalTitle">
+  <form class="modal__box" id="adminForm">
+    <h2 class="modal__title" id="adminModalTitle">Admin sign in</h2>
+    <p class="modal__text">Deleting projects and committee members is restricted. Enter the admin password to continue.</p>
+    <input class="modal__input" type="password" id="adminPassword" placeholder="Password" autocomplete="current-password" aria-label="Admin password">
+    <p class="modal__error" id="adminError" hidden></p>
+    <div class="modal__actions">
+      <button class="btn" type="button" id="adminCancel">Cancel</button>
+      <button class="btn btn--primary" type="submit">Sign in</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+# Club Projects
+
+A project workspace for the club committee — redesigned frontend on top of a
+Java **Spring Boot** backend with a **SQLite** database.
+
+The old single-file `club-projects_1.html` kept everything in browser storage,
+so the data lived on one laptop. Now every project is a row in a real database
+that the whole committee can share.
+
+---
+
+## What you need
+
+| Tool | Version | Check with |
+| --- | --- | --- |
+| JDK | 17 or newer | `java -version` |
+| Maven | 3.8+ (or use your IDE's bundled one) | `mvn -version` |
+
+Neither is currently installed on this machine. Install a JDK (for example
+[Temurin 21](https://adoptium.net/)) and [Maven](https://maven.apache.org/download.cgi),
+or just open this folder in IntelliJ IDEA / VS Code with the Java extension pack,
+which ships its own Maven.
+
+## Run it
+
+```bash
+mvn spring-boot:run
+```
+
+Then open <http://localhost:8080>.
+
+On the very first run the app creates `data/club-projects.db` and seeds it with
+the 17 committee members and the 14 projects from the original page. After that
+it never touches your data again.
+
+## Build a runnable jar
+
+```bash
+mvn clean package
+```
+
+```bash
+java -jar target/club-projects-1.0.0.jar
+```
+
+To put the database somewhere else, point the datasource at another file:
+
+```bash
+java -jar target/club-projects-1.0.0.jar --spring.datasource.url=jdbc:sqlite:C:/club/projects.db
+```
+
+---
+
+## API
+
+| Method | Path | Does |
+| --- | --- | --- |
+| `GET` | `/api/projects?q=&status=` | List projects, optionally searched/filtered |
+| `GET` | `/api/projects/{id}` | One project |
+| `POST` | `/api/projects` | Create |
+| `PUT` | `/api/projects/{id}` | Replace (the UI autosaves through this) |
+| `DELETE` | `/api/projects/{id}` | Delete |
+| `GET` | `/api/projects/stats` | Counts for the dashboard tiles |
+| `GET` | `/api/projects/export.tsv` | Tab-separated export for spreadsheets |
+| `POST` | `/api/admin/login` | Exchange the password for a token — `{"password":"..."}` |
+| `POST` | `/api/admin/logout` | End the admin session |
+| `GET` | `/api/admin/session` | Is the stored token still valid? |
+| `POST` | `/api/projects/{id}/thumbnail` | Upload a photo (multipart, field `file`) |
+| `GET` | `/api/projects/{id}/thumbnail` | The image bytes |
+| `DELETE` | `/api/projects/{id}/thumbnail` | Remove the photo |
+| `GET` | `/api/meta` | Types, categories, statuses, committee — one round trip |
+| `GET` | `/api/committee` | Members as `{id, name, role, projectCount}` |
+| `POST` | `/api/committee` | Add a member — body `{"name":"..."}` |
+| `DELETE` | `/api/committee/{id}` | Remove a member |
+
+## Admins and deleting
+
+Everyone can add and edit projects, upload photos and add committee members.
+**Only admins can delete** a project or a committee member. Anyone else who
+clicks a delete button gets a message saying so.
+
+### The admin door
+
+It is deliberately unmarked — there is no "Admin" link in the interface. Two
+ways in, both worth writing down somewhere:
+
+- Go to **`http://localhost:8080/#/admin`**
+- Or **click the club badge (top-left) five times quickly**
+
+Either opens a password prompt. Signing in reveals the admin panel, which lists
+every project and committee member with a delete button beside each.
+
+### The password
+
+Set in `application.properties`:
+
+```properties
+club.admin.password=${CLUB_ADMIN_PASSWORD:leo-admin-2026}
+```
+
+**Change it before the club uses this.** Either edit that line, or leave it and
+set an environment variable instead, which keeps the password out of the file:
+
+```bash
+set CLUB_ADMIN_PASSWORD=your-password-here
+```
+
+### What this protects, and what it doesn't
+
+The check that matters is [`AdminGuard`](src/main/java/lk/leoclub/clubprojects/web/AdminGuard.java),
+a server-side interceptor. It rejects any `DELETE` on `/api/projects/{id}` or
+`/api/committee/{id}` without a valid token — so calling the API directly with
+`curl` or the browser console fails the same way the button does. Hiding buttons
+in the browser alone would have protected nothing.
+
+Being straight about the limits:
+
+- It is **one shared password**, not user accounts. Anyone who knows it is an
+  admin, and there is no record of who deleted what.
+- The hidden door is **convenience, not security**. Anyone reading `app.js` can
+  find it. The password is what actually stops people.
+- Sessions live **in memory and last 8 hours**; restarting the app signs
+  everyone out. The token is kept in `sessionStorage`, so closing the tab also
+  ends it.
+- Photos are **not** restricted — anyone can change or remove a project's
+  picture, since that is editing rather than destroying a record.
+
+If the club ever needs real accounts with per-person logins and an audit trail,
+that means Spring Security and a users table — a much bigger change than this.
+
+## Project photos
+
+Each project can carry a photo, which fills its card on the home screen as a
+faint background so the board is scannable at a glance. Open a project and use
+the tile beside the title — click it to browse, or drop an image straight onto
+it. The **×** removes it.
+
+The card photo sits behind a scrim that **follows the theme**: it darkens the
+image in dark mode and lightens it in light mode. A fixed dark overlay would
+have buried the dark text on a white card. Both are tuned by four variables
+(`--cover-strength`, `--cover-scrim-1..3`) at the top of `app.css` if you want
+the photo bolder or fainter.
+
+Some deliberate choices:
+
+- **The browser shrinks the image before uploading.** A photo is scaled to fit
+  480px on its long edge and re-encoded as JPEG, which turned a 95 KB test image
+  into 5 KB. Phone snaps of several megabytes become tens of kilobytes, so the
+  database stays small. 480px is deliberately larger than the card needs, so the
+  background still looks sharp on a high-resolution screen. GIFs are left alone
+  so animation survives.
+- **Bytes live in their own table** (`project_thumbnails`). Listing projects for
+  the home screen would otherwise drag every image out of the database with it.
+  The project row keeps only the content type and a timestamp.
+- **The image URL carries a `?v=` stamp** taken from that timestamp, so it can be
+  cached hard for a month yet still update the instant a photo is replaced.
+- Server-side limits: 2 MB, and only JPEG, PNG, WebP or GIF. Deleting a project
+  deletes its image too.
+
+## Managing the committee
+
+The committee panel on the home screen is editable. **Add member** opens an
+inline field; each member chip has a **×** that appears on hover, and the small
+number beside a name is how many projects they are assigned to.
+
+Removing someone is deliberately *not* destructive. Assignees are stored as
+names, so a member who leaves **keeps their name on every project they already
+ran** — the history stays true, they simply stop appearing as a choice for new
+work. The confirmation says how many projects are affected before you commit.
+
+This has one consequence worth knowing about: the assignee picker rebuilds a
+project's list from the buttons on screen, so a former member still shows up
+there — marked with a dashed outline and "No longer on the committee" — and
+stays ticked. Without that, opening an old project and editing any field would
+quietly erase them from it.
+
+Duplicate names are rejected, and extra spacing is tidied up, so
+`"  Nimesha   Perera "` and `"Nimesha Perera"` are treated as the same person.
+
+Deleting a member or a project asks for confirmation through an in-page
+`<dialog>` rather than `window.confirm()`. That is deliberate: embedded browsers
+and preview panes often suppress native dialogs outright, and the page then
+reads the refusal as "cancel" — the delete button appears to do nothing at all.
+
+## Layout
+
+```
+src/main/java/lk/leoclub/clubprojects/
+  ClubProjectsApplication.java   entry point (also creates the data/ folder)
+  config/     DataSeeder, WebConfig (CORS for local dev)
+  model/      Project, SubTask, CommitteeMember  — JPA entities
+  repository/ Spring Data repositories + the search query
+  service/    ProjectService (rules, sorting, TSV export), ProjectMapper, Catalog
+  web/        REST controllers + error handling
+src/main/resources/
+  application.properties
+  static/     index.html, css/app.css, js/app.js  — the UI
+```
+
+## How the progress bar works
+
+There is no slider to drag. Progress **measures how much of the record has been
+filled in** — the bar moves on its own as the committee completes the form.
+
+Twenty things are counted, each worth 5%:
+
+| Group | Counted |
+| --- | --- |
+| The basics | start date, due date, duration, venue |
+| Who is running it | chairman, secretary, treasurer, participation |
+| Impact & reporting | beneficiaries, service hours, project value, funds, community, data collection, community need, service opportunity |
+| Guests & notes | chief guest, other guests, special note |
+| People | at least one person assigned |
+
+Project **type** and **category** are excluded on purpose — they always carry a
+default value, so counting them would hand out free progress.
+
+The list lives in one place, [`ProjectCompletion.java`](src/main/java/lk/leoclub/clubprojects/service/ProjectCompletion.java).
+The server recomputes the percentage on every save and ignores whatever the
+browser sends, while `/api/meta` publishes the field names so the bar can update
+live as you type without the two ever disagreeing. To change what counts, edit
+`trackedFields()` — the UI follows automatically.
+
+Status and progress are now independent: marking a project **Done** no longer
+forces the bar to 100%, so a finished project with unfinished paperwork still
+shows the gap.
+
+## Notes on the design
+
+- **Dates are stored as ISO text** (`2026-07-18`). SQLite has no date type, and
+  text sorts correctly in ISO format, so this keeps queries simple and avoids
+  driver-level date conversion quirks.
+- **One connection in the pool.** SQLite allows a single writer, so Hikari is
+  capped at one connection to sidestep `SQLITE_BUSY` errors.
+- **Ids are UUID strings** assigned by the app rather than autoincrement
+  integers, which keeps inserts simple across SQLite and any future database.
+- **The frontend has no build step** — plain HTML, CSS and framework-free JS,
+  served straight out of `static/`. Themes follow your OS by default and the
+  choice is remembered in `localStorage`.
+- **Keyboard**: `/` focuses search, `Esc` closes an open project.
