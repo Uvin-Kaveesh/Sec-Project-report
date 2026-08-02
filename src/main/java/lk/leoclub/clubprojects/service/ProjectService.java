@@ -28,6 +28,8 @@ public class ProjectService {
             { "dueDate", "End date" },
             { "duration", "Service Hours (Project Duration)" },
             { "venue", "Venue" },
+            { "onBehalfOfDistrict", "On behalf of Leo District?" },
+            { "onBehalfOfMultipleDistrict", "On behalf of Leo Multiple District?" },
             { "chair", "Project Chairman(s)" },
             { "secretary", "Project Secretary(s)" },
             { "treasurer", "Project Treasurer(s)" },
@@ -144,6 +146,8 @@ public class ProjectService {
             case "dueDate" -> p.dueDate;
             case "duration" -> p.duration;
             case "venue" -> p.venue;
+            case "onBehalfOfDistrict" -> p.onBehalfOfDistrict;
+            case "onBehalfOfMultipleDistrict" -> p.onBehalfOfMultipleDistrict;
             case "chair" -> p.chair;
             case "secretary" -> p.secretary;
             case "treasurer" -> p.treasurer;

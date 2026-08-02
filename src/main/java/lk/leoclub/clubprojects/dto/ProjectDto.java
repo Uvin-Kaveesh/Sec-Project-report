@@ -25,6 +25,10 @@ public class ProjectDto {
     public String duration = "";
     public String venue = "";
 
+    /** "Yes", "No", or empty when unanswered. */
+    public String onBehalfOfDistrict = "";
+    public String onBehalfOfMultipleDistrict = "";
+
     public String chair = "";
     public String secretary = "";
     public String treasurer = "";

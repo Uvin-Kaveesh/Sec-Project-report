@@ -37,6 +37,8 @@ public final class ProjectCompletion {
         m.put("dueDate", Project::getDueDate);
         m.put("duration", Project::getDuration);
         m.put("venue", Project::getVenue);
+        m.put("onBehalfOfDistrict", Project::getOnBehalfOfDistrict);
+        m.put("onBehalfOfMultipleDistrict", Project::getOnBehalfOfMultipleDistrict);
         // Who is running it
         m.put("chair", Project::getChair);
         m.put("secretary", Project::getSecretary);

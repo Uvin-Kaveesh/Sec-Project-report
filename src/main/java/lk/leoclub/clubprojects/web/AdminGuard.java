@@ -29,6 +29,8 @@ public class AdminGuard implements HandlerInterceptor {
             "Only admins can delete a project or a committee member.";
     public static final String STRUCTURE_MESSAGE =
             "Only admins can change project types and categories.";
+    public static final String SITE_MESSAGE =
+            "Only admins can change the club logo.";
 
     private final AdminService admin;
     private final Set<String> guardedMethods;

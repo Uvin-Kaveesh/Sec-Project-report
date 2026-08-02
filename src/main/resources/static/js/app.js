@@ -72,6 +72,8 @@
       ['dueDate',   'End date',        'date'],
       ['duration',  'Project duration', 'text', 'How long it runs, e.g. 4 hours'],
       ['venue',     'Venue',           'text', 'Where it happens'],
+      ['onBehalfOfDistrict',         'Was the project organized on behalf of Leo District?', 'yesno'],
+      ['onBehalfOfMultipleDistrict', 'Was the project organized on behalf of Leo Multiple District?', 'yesno'],
     ]],
     ['Who is running it', [
       ['chair',         'Project chairman(s)', 'members', 'Pick from the committee, or type a name'],
@@ -90,8 +92,8 @@
       ['opportunity',   'Service opportunity',  'area', 'What did members get to do?'],
     ]],
     ['Guests & notes', [
-      ['chiefGuest',  'Chief guest(s)', 'names', 'Type a name and press Enter'],
-      ['otherGuests', 'Other guests',   'names', 'Type a name and press Enter'],
+      ['chiefGuest',  'Chief guest(s)', 'guests', 'Name and designation, then Add'],
+      ['otherGuests', 'Other guests',   'guests', 'Name and designation, then Add'],
       ['note',        'Special note',  'area', 'Anything the next person should know'],
     ]],
   ];
@@ -692,6 +694,21 @@
       </div>`;
   }
 
+  /** Yes/No toggles. Clicking the chosen side again clears the answer. */
+  function initYesNo(root) {
+    $$('.yesno', root).forEach((group) => {
+      const hidden = $('input[type="hidden"]', group);
+      $$('.yesno__btn', group).forEach((btn) => {
+        btn.onclick = () => {
+          const picked = hidden.value === btn.dataset.choice ? '' : btn.dataset.choice;
+          hidden.value = picked;
+          $$('.yesno__btn', group).forEach((b) => b.classList.toggle('is-on', b.dataset.choice === picked));
+          hidden.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+      });
+    });
+  }
+
   function initNames(root) {
     $$('.names', root).forEach((box) => {
       const hidden = $('input[type="hidden"]', box);
@@ -782,6 +799,118 @@
     });
   }
 
+  /* ============================================================
+     Guests — a name and a designation per person
+     ------------------------------------------------------------
+     Stored in the same single text column as before, as
+     "Name (Designation); Next Name (Designation)".
+     Semicolons separate people because designations frequently contain a comma
+     ("Vice Chancellor, University of Colombo") and a comma-separated list would
+     split straight through one.
+     ============================================================ */
+  function splitGuests(value) {
+    const s = String(value ?? '').trim();
+    if (!s) return [];
+    let parts;
+    if (s.includes(';')) {
+      parts = s.split(';');                 // current format
+    } else if (s.includes('(')) {
+      parts = [s];                          // one guest whose designation may hold commas
+    } else {
+      parts = s.split(',');                 // plain names saved before designations existed
+    }
+    return parts.map((p) => p.trim()).filter(Boolean).map(parseGuest);
+  }
+
+  function parseGuest(entry) {
+    const m = entry.match(/^(.*?)\s*\(([^()]*)\)$/);
+    return m
+      ? { name: m[1].trim(), role: m[2].trim() }
+      : { name: entry.trim(), role: '' };
+  }
+
+  const formatGuest = (g) => (g.role ? `${g.name} (${g.role})` : g.name);
+  const joinGuests = (list) => list.map(formatGuest).join('; ');
+
+  function guestChip(g, index) {
+    return `<span class="chip-name chip-name--guest" data-index="${index}">
+        <span class="chip-name__text">${esc(g.name)}${g.role ? `<em class="chip-name__role">${esc(g.role)}</em>` : ''}</span>
+        <button class="chip-name__x" type="button" data-drop="${index}" aria-label="Remove ${esc(g.name)}">${XMARK}</button>
+      </span>`;
+  }
+
+  function guestsHtml(key, value, { namePlaceholder, rolePlaceholder }) {
+    const list = splitGuests(value);
+    return `
+      <div class="guests" data-guests="${esc(key)}">
+        <input type="hidden" data-key="${esc(key)}" value="${esc(joinGuests(list))}">
+        <div class="guests__chips">${list.map(guestChip).join('')}</div>
+        <div class="guests__form">
+          <input class="guests__name" type="text" placeholder="${esc(namePlaceholder)}" autocomplete="off" aria-label="${esc(namePlaceholder)}">
+          <div class="guests__row">
+            <input class="guests__role" type="text" placeholder="${esc(rolePlaceholder)}" autocomplete="off" aria-label="${esc(rolePlaceholder)}">
+            <button class="btn btn--sm guests__add" type="button">Add</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function initGuests(root) {
+    $$('.guests', root).forEach((box) => {
+      const hidden = $('input[type="hidden"]', box);
+      const chips = $('.guests__chips', box);
+      const nameInput = $('.guests__name', box);
+      const roleInput = $('.guests__role', box);
+
+      const current = () => splitGuests(hidden.value);
+
+      const write = (list) => {
+        hidden.value = joinGuests(list);
+        chips.innerHTML = list.map(guestChip).join('');
+        $$('[data-drop]', chips).forEach((btn) => {
+          btn.onclick = () => {
+            const next = current();
+            next.splice(+btn.dataset.drop, 1);
+            write(next);
+          };
+        });
+        hidden.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+
+      const add = () => {
+        const name = nameInput.value.trim().replace(/\s+/g, ' ');
+        const role = roleInput.value.trim().replace(/\s+/g, ' ');
+        if (!name) { nameInput.focus(); return; }
+
+        const list = current();
+        if (list.some((g) => g.name.toLowerCase() === name.toLowerCase())) {
+          toast(`${name} is already listed`, 'error');
+          return;
+        }
+        // Parentheses and semicolons are the separators, so they cannot appear
+        // inside a value without corrupting the stored string.
+        const clean = (s) => s.replace(/[();]/g, ' ').replace(/\s+/g, ' ').trim();
+        write([...list, { name: clean(name), role: clean(role) }]);
+        nameInput.value = '';
+        roleInput.value = '';
+        nameInput.focus();
+      };
+
+      $('.guests__add', box).onclick = add;
+      [nameInput, roleInput].forEach((el) => {
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); add(); }
+        });
+      });
+      // Typing a name then clicking elsewhere should not lose it.
+      box.addEventListener('focusout', (e) => {
+        if (!box.contains(e.relatedTarget) && nameInput.value.trim()) add();
+      });
+
+      write(current());
+    });
+  }
+
   function fieldHtml(def) {
     const [key, label, type, hint = ''] = def;
     const value = state.current[key] ?? '';
@@ -793,8 +922,21 @@
     } else if (type === 'datalist') {
       control = comboHtml(key, value, state.meta.categories || [],
         { editable: true, placeholder: 'Choose or type your own' });
+    } else if (type === 'yesno') {
+      control = `
+        <div class="yesno" data-yesno="${esc(key)}">
+          <input type="hidden" data-key="${esc(key)}" value="${esc(value)}">
+          <button class="yesno__btn yesno__btn--yes${value === 'Yes' ? ' is-on' : ''}" type="button" data-choice="Yes">Yes</button>
+          <button class="yesno__btn yesno__btn--no${value === 'No' ? ' is-on' : ''}" type="button" data-choice="No">No</button>
+        </div>`;
     } else if (type === 'members') {
       control = namesHtml(key, value, { suggest: true, placeholder: 'Pick or type a name…' });
+    } else if (type === 'guests') {
+      const who = key === 'chiefGuest' ? 'chief guest' : 'guest';
+      control = guestsHtml(key, value, {
+        namePlaceholder: `Enter ${who}'s name`,
+        rolePlaceholder: `Enter ${who}'s designation`,
+      });
     } else if (type === 'names') {
       control = namesHtml(key, value, { placeholder: 'Type a name and press Enter' });
     } else if (type === 'area') {
@@ -863,6 +1005,8 @@
     $('#detailBody').innerHTML = html;
     initCombos($('#detailBody'));
     initNames($('#detailBody'));
+    initGuests($('#detailBody'));
+    initYesNo($('#detailBody'));
 
     $$('#picker button').forEach((btn) => {
       btn.onclick = () => {
@@ -976,11 +1120,14 @@
    * snap becomes a ~40 KB square, which keeps the database small and the upload
    * quick. Falls back to the original file if anything here is unsupported.
    */
-  async function shrinkImage(file) {
+  async function shrinkImage(file, { maxEdge = THUMB_MAX_EDGE, keepAlpha = false } = {}) {
     if (file.type === 'image/gif') return file;   // resizing would kill the animation
+    // A logo is usually a transparent PNG; re-encoding it as JPEG would paint a
+    // solid block behind it, so those keep their format.
+    const asPng = keepAlpha && file.type === 'image/png';
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-      const scale = Math.min(1, THUMB_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+      const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
       const w = Math.max(1, Math.round(bitmap.width * scale));
       const h = Math.max(1, Math.round(bitmap.height * scale));
 
@@ -991,10 +1138,13 @@
       ctx.drawImage(bitmap, 0, 0, w, h);
       bitmap.close?.();
 
-      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', THUMB_QUALITY));
+      const mime = asPng ? 'image/png' : 'image/jpeg';
+      const blob = await new Promise((res) => canvas.toBlob(res, mime, THUMB_QUALITY));
       if (!blob) return file;
       // If the original was already smaller, keep it.
-      return blob.size < file.size ? new File([blob], 'thumbnail.jpg', { type: 'image/jpeg' }) : file;
+      return blob.size < file.size
+        ? new File([blob], asPng ? 'logo.png' : 'thumbnail.jpg', { type: mime })
+        : file;
     } catch {
       return file;
     }
@@ -1058,6 +1208,80 @@
       state.current.thumbnailVersion = null;
       renderThumb();
       toast('Photo removed');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  /* ============================================================
+     Club logo
+     ============================================================ */
+  const logoUrl = () => `/api/site/logo?v=${state.meta.logoVersion || 0}`;
+
+  /** Swaps the "LC" badge in the header for the uploaded logo. */
+  function renderBrand() {
+    const mark = $('#brandMark');
+    if (state.meta.hasLogo) {
+      mark.classList.add('has-logo');
+      mark.innerHTML = `<img src="${logoUrl()}" alt="Club logo">`;
+    } else {
+      mark.classList.remove('has-logo');
+      mark.textContent = 'LC';
+    }
+  }
+
+  /** The same picture again in the admin panel, with its buttons. */
+  function renderLogoPanel() {
+    const drop = $('#logoDrop');
+    if (!drop) return;
+    const img = $('#logoImg');
+    drop.classList.toggle('has-image', !!state.meta.hasLogo);
+    $('#logoEmpty').hidden = !!state.meta.hasLogo;
+    $('#logoRemove').hidden = !state.meta.hasLogo;
+    $('#logoPick').textContent = state.meta.hasLogo ? 'Replace image' : 'Choose an image';
+    img.hidden = !state.meta.hasLogo;
+    if (state.meta.hasLogo) img.src = logoUrl();
+    else img.removeAttribute('src');
+  }
+
+  async function uploadLogo(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast('That file is not an image', 'error');
+      return;
+    }
+    const drop = $('#logoDrop');
+    drop.classList.add('is-busy');
+    try {
+      const body = new FormData();
+      body.append('file', await shrinkImage(file, { maxEdge: 512, keepAlpha: true }));
+      const info = await api.req('/site/logo', { method: 'POST', body });
+      state.meta.hasLogo = info.hasLogo;
+      state.meta.logoVersion = info.logoVersion;
+      renderBrand();
+      renderLogoPanel();
+      toast('Logo updated');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      drop.classList.remove('is-busy');
+    }
+  }
+
+  async function removeLogo() {
+    const ok = await confirmAction({
+      title: 'Remove the club logo?',
+      text: 'The header goes back to showing the “LC” badge.',
+      confirmLabel: 'Remove logo',
+    });
+    if (!ok) return;
+    try {
+      await api.req('/site/logo', { method: 'DELETE' });
+      state.meta.hasLogo = false;
+      state.meta.logoVersion = null;
+      renderBrand();
+      renderLogoPanel();
+      toast('Logo removed');
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -1225,6 +1449,7 @@
     state.projects = projects;
     state.meta.committee = members;
     renderCatalog(catalog);
+    renderLogoPanel();
 
     $('#adminProjectCount').textContent = `${projects.length} project${projects.length === 1 ? '' : 's'}`;
     $('#adminMemberCount').textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
@@ -1420,6 +1645,25 @@
 
     $('#adminBack').onclick = () => go('#/');
     $('#adminLogout').onclick = adminSignOut;
+    // logo: click to browse, or drop a file on the square
+    $('#logoPick').onclick = () => $('#logoInput').click();
+    $('#logoDrop').onclick = () => $('#logoInput').click();
+    $('#logoRemove').onclick = removeLogo;
+    $('#logoInput').addEventListener('change', (e) => {
+      uploadLogo(e.target.files[0]);
+      e.target.value = '';
+    });
+    ['dragenter', 'dragover'].forEach((evt) => {
+      $('#logoDrop').addEventListener(evt, (e) => { e.preventDefault(); $('#logoDrop').classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach((evt) => {
+      $('#logoDrop').addEventListener(evt, () => $('#logoDrop').classList.remove('is-over'));
+    });
+    $('#logoDrop').addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadLogo(e.dataTransfer.files[0]);
+    });
+
     $('#typeForm').addEventListener('submit', (e) => {
       e.preventDefault();
       addCatalogItem('types', $('#typeInput'));
@@ -1499,6 +1743,7 @@
     } catch {
       toast('Could not load the committee list', 'error');
     }
+    renderBrand();
     renderCommittee();
     route();
   }

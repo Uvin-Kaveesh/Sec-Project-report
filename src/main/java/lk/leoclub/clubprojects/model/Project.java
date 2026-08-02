@@ -42,6 +42,17 @@ public class Project {
 
     private String duration = "";
     private String venue = "";
+
+    /**
+     * "Yes", "No", or empty when nobody has answered yet. Kept as text rather
+     * than a Boolean so the blank third state needs no special handling, and so
+     * the spreadsheet export reads the way the club's forms already do.
+     */
+    @Column(name = "on_behalf_of_district", length = 3)
+    private String onBehalfOfDistrict = "";
+
+    @Column(name = "on_behalf_of_multiple_district", length = 3)
+    private String onBehalfOfMultipleDistrict = "";
     private String chair = "";
     private String secretary = "";
     private String treasurer = "";
@@ -178,6 +189,22 @@ public class Project {
 
     public void setVenue(String venue) {
         this.venue = venue;
+    }
+
+    public String getOnBehalfOfDistrict() {
+        return onBehalfOfDistrict;
+    }
+
+    public void setOnBehalfOfDistrict(String onBehalfOfDistrict) {
+        this.onBehalfOfDistrict = onBehalfOfDistrict;
+    }
+
+    public String getOnBehalfOfMultipleDistrict() {
+        return onBehalfOfMultipleDistrict;
+    }
+
+    public void setOnBehalfOfMultipleDistrict(String onBehalfOfMultipleDistrict) {
+        this.onBehalfOfMultipleDistrict = onBehalfOfMultipleDistrict;
     }
 
     public String getChair() {

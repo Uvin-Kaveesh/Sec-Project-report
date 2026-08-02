@@ -30,6 +30,9 @@ public class ProjectMapper {
         d.dueDate = p.getDueDate();
         d.duration = p.getDuration();
         d.venue = p.getVenue();
+        // Columns added after the first release are null on older rows.
+        d.onBehalfOfDistrict = nz(p.getOnBehalfOfDistrict());
+        d.onBehalfOfMultipleDistrict = nz(p.getOnBehalfOfMultipleDistrict());
         d.chair = p.getChair();
         d.secretary = p.getSecretary();
         d.treasurer = p.getTreasurer();
@@ -74,6 +77,8 @@ public class ProjectMapper {
         p.setDueDate(nz(d.dueDate));
         p.setDuration(nz(d.duration));
         p.setVenue(nz(d.venue));
+        p.setOnBehalfOfDistrict(yesNo(d.onBehalfOfDistrict));
+        p.setOnBehalfOfMultipleDistrict(yesNo(d.onBehalfOfMultipleDistrict));
         p.setChair(nz(d.chair));
         p.setSecretary(nz(d.secretary));
         p.setTreasurer(nz(d.treasurer));
@@ -142,6 +147,18 @@ public class ProjectMapper {
 
     private static String nz(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    /** Accepts only "Yes" or "No"; anything else means the question is unanswered. */
+    private static String yesNo(String s) {
+        String v = nz(s);
+        if (v.equalsIgnoreCase("Yes")) {
+            return "Yes";
+        }
+        if (v.equalsIgnoreCase("No")) {
+            return "No";
+        }
+        return "";
     }
 
     private static String blankTo(String s, String fallback) {

@@ -37,6 +37,11 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(new AdminGuard(admin, Set.of("POST", "PUT", "DELETE"),
                         AdminGuard.STRUCTURE_MESSAGE))
                 .addPathPatterns("/api/catalog/**");
+
+        // Same for the site logo — it appears on every screen for everyone.
+        registry.addInterceptor(new AdminGuard(admin, Set.of("POST", "PUT", "DELETE"),
+                        AdminGuard.SITE_MESSAGE))
+                .addPathPatterns("/api/site/**");
     }
 
     /**

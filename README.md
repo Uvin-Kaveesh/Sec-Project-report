@@ -68,7 +68,11 @@ java -jar target/club-projects-1.0.0.jar --spring.datasource.url=jdbc:sqlite:C:/
 | `POST` | `/api/projects/{id}/thumbnail` | Upload a photo (multipart, field `file`) |
 | `GET` | `/api/projects/{id}/thumbnail` | The image bytes |
 | `DELETE` | `/api/projects/{id}/thumbnail` | Remove the photo |
-| `GET` | `/api/meta` | Types, categories, statuses, committee — one round trip |
+| `GET` | `/api/site` | Whether a logo exists, and its version |
+| `GET` | `/api/site/logo` | The logo image bytes |
+| `POST` | `/api/site/logo` | Upload a logo (multipart, field `file`) — admin |
+| `DELETE` | `/api/site/logo` | Remove the logo — admin |
+| `GET` | `/api/meta` | Types, categories, statuses, committee, logo — one round trip |
 | `GET` | `/api/committee` | Members as `{id, name, role, projectCount}` |
 | `POST` | `/api/committee` | Add a member — body `{"name":"..."}` |
 | `DELETE` | `/api/committee/{id}` | Remove a member |
@@ -157,6 +161,23 @@ Some deliberate choices:
 - Server-side limits: 2 MB, and only JPEG, PNG, WebP or GIF. Deleting a project
   deletes its image too.
 
+## Club logo
+
+The admin panel has a **Club logo** section. Click the square or drop an image
+on it; the logo replaces the "LC" badge in the header on every page, for
+everyone. **Remove** puts the badge back.
+
+- Admin-only to change, since it appears site-wide.
+- PNG, JPEG or WebP, up to 1 MB. The browser shrinks it to 512px first.
+- **A transparent PNG stays a PNG.** Project thumbnails get re-encoded as JPEG
+  to save space, but doing that to a logo would paint a solid block behind it,
+  so images with transparency keep their format.
+- **SVG is deliberately refused.** An SVG can carry script, and serving one from
+  this origin would let it run with the site's privileges. PNG covers what a
+  logo needs.
+- The image URL carries a `?v=` stamp, so it caches hard yet updates the moment
+  it is replaced.
+
 ## Card structure — types and categories
 
 The admin panel has a **Card structure** section for the two pick-lists on the
@@ -225,11 +246,11 @@ src/main/resources/
 There is no slider to drag. Progress **measures how much of the record has been
 filled in** — the bar moves on its own as the committee completes the form.
 
-Twenty things are counted, each worth 5%:
+Twenty-two things are counted, each worth about 4.5%:
 
 | Group | Counted |
 | --- | --- |
-| The basics | start date, due date, duration, venue |
+| The basics | start date, end date, duration, venue, the two Leo District questions |
 | Who is running it | chairman, secretary, treasurer, participation |
 | Impact & reporting | beneficiaries, service hours, project value, funds, community, data collection, community need, service opportunity |
 | Guests & notes | chief guest, other guests, special note |
@@ -257,13 +278,18 @@ shows the gap.
   capped at one connection to sidestep `SQLITE_BUSY` errors.
 - **Ids are UUID strings** assigned by the app rather than autoincrement
   integers, which keeps inserts simple across SQLite and any future database.
-- **Roles and guests are name chips, not free text.** Chairman, secretary and
-  treasurer offer the committee as you type — pick from the list, or type
-  someone who is not a member. Chief guests and other guests take any typed
-  name. Each name becomes a removable chip; committee members show their
-  initials so it is obvious who is from the club. The value is still stored as a
-  comma-separated string, so the database and the spreadsheet export are
-  unchanged and existing records load straight into chips.
+- **Roles are name chips, not free text.** Chairman, secretary and treasurer
+  offer the committee as you type — pick from the list, or type someone who is
+  not a member. Each name becomes a removable chip; committee members show their
+  initials so it is obvious who is from the club. Stored as a comma-separated
+  string, so the database and the export are unchanged.
+- **Guests carry a name and a designation.** Fill both boxes and press Add or
+  Enter; each guest becomes a chip showing "Name │ Designation". The pair is
+  stored in the same single column as `Name (Designation); Next Name (…)`.
+  Semicolons separate people **because designations so often contain a comma**
+  ("Vice Chancellor, University of Colombo") and a comma-separated list would
+  split straight through one. Records saved before designations existed are
+  plain comma-separated names and still load correctly.
 - **The dropdowns are custom, not native.** A `<select>` popup and `<datalist>`
   suggestion list are drawn by the browser and ignore CSS completely, so they
   never matched the rest of the page. Both are rebuilt in `app.js` as a combo
