@@ -19,6 +19,14 @@ public interface ProjectRepository extends JpaRepository<Project, String> {
     @Query("select a, count(p) from Project p join p.assignees a group by a")
     List<Object[]> countProjectsPerAssignee();
 
+    /** Project type paired with how many projects use it. Rows of {@code [String, Long]}. */
+    @Query("select p.type, count(p) from Project p group by p.type")
+    List<Object[]> countProjectsPerType();
+
+    /** Project category paired with how many projects use it. */
+    @Query("select p.category, count(p) from Project p group by p.category")
+    List<Object[]> countProjectsPerCategory();
+
     /**
      * Free-text search across the fields a committee member would actually
      * search by, including the names of everyone assigned to the project.

@@ -69,14 +69,14 @@
       ['type',      'Project type',    'select'],
       ['category',  'Project category', 'datalist'],
       ['startDate', 'Start date',      'date'],
-      ['dueDate',   'Due on',          'date'],
+      ['dueDate',   'End date',        'date'],
       ['duration',  'Project duration', 'text', 'How long it runs, e.g. 4 hours'],
       ['venue',     'Venue',           'text', 'Where it happens'],
     ]],
     ['Who is running it', [
-      ['chair',         'Project chairman(s)', 'text', 'Separate names with commas'],
-      ['secretary',     'Project secretary(s)', 'text', ''],
-      ['treasurer',     'Project treasurer(s)', 'text', ''],
+      ['chair',         'Project chairman(s)', 'members', 'Pick from the committee, or type a name'],
+      ['secretary',     'Project secretary(s)', 'members', 'Pick from the committee, or type a name'],
+      ['treasurer',     'Project treasurer(s)', 'members', 'Pick from the committee, or type a name'],
       ['participation', 'Project participation', 'text', 'No. of club members taking part'],
     ]],
     ['Impact & reporting', [
@@ -90,8 +90,8 @@
       ['opportunity',   'Service opportunity',  'area', 'What did members get to do?'],
     ]],
     ['Guests & notes', [
-      ['chiefGuest',  'Chief guest',   'text', ''],
-      ['otherGuests', 'Other guests',  'text', ''],
+      ['chiefGuest',  'Chief guest(s)', 'names', 'Type a name and press Enter'],
+      ['otherGuests', 'Other guests',   'names', 'Type a name and press Enter'],
       ['note',        'Special note',  'area', 'Anything the next person should know'],
     ]],
   ];
@@ -134,6 +134,9 @@
     },
     meta:    ()        => api.req('/meta'),
     committee:    ()      => api.req('/committee'),
+    catalog:        ()        => api.req('/catalog'),
+    addCatalog:     (kind, label) => api.req(`/catalog/${kind}`, { method: 'POST', body: JSON.stringify({ label }) }),
+    removeCatalog:  (id)      => api.req(`/catalog/${id}`, { method: 'DELETE' }),
     adminLogin:   (password) => api.req('/admin/login', { method: 'POST', body: JSON.stringify({ password }) }),
     adminLogout:  ()      => api.req('/admin/logout', { method: 'POST' }),
     adminSession: ()      => api.req('/admin/session'),
@@ -473,18 +476,327 @@
   /* ============================================================
      DETAIL
      ============================================================ */
+  /* ============================================================
+     Combo box — a dropdown we can actually style
+     ------------------------------------------------------------
+     Native <select> popups and <datalist> suggestions are drawn by the browser
+     and ignore CSS entirely, so both are rebuilt here. A hidden input carries
+     the value, which keeps the existing autosave wiring working untouched.
+     ============================================================ */
+  const CHEVRON = '<svg class="i combo__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
+  const TICK = '<svg class="i combo__tick" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+
+  function optionRow(label, selected) {
+    return `<button class="combo__opt${selected ? ' is-on' : ''}" type="button" role="option"
+              aria-selected="${selected}" data-value="${esc(label)}">
+        <span class="combo__opt-label">${esc(label)}</span>
+        ${TICK}
+      </button>`;
+  }
+
+  function comboHtml(key, value, options, { editable = false, placeholder = '' } = {}) {
+    const list = [...options];
+    // An option an admin has since removed still has to appear on projects
+    // using it, or selecting anything else would quietly rewrite the record.
+    if (value && !list.includes(value)) list.push(value);
+    const searchable = editable || list.length > 6;
+
+    return `
+      <div class="combo${editable ? ' combo--editable' : ''}" data-combo="${esc(key)}" data-placeholder="${esc(placeholder)}">
+        <input type="hidden" data-key="${esc(key)}" value="${esc(value)}">
+        <button class="combo__field" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <span class="combo__value${value ? '' : ' is-empty'}">${esc(value || placeholder)}</span>
+          ${CHEVRON}
+        </button>
+        <div class="combo__pop" hidden>
+          ${searchable ? `
+            <label class="combo__search">
+              <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/></svg>
+              <input type="text" placeholder="${editable ? 'Search or type your own' : 'Search'}" autocomplete="off" spellcheck="false">
+            </label>` : ''}
+          <div class="combo__list" role="listbox">
+            ${list.map((o) => optionRow(o, o === value)).join('')}
+          </div>
+          ${editable ? '<div class="combo__hint">Type anything and press <kbd>Enter</kbd> to use it</div>' : ''}
+        </div>
+      </div>`;
+  }
+
+  /** Wires up every combo inside a freshly rendered container. */
+  function initCombos(root) {
+    $$('.combo', root).forEach((combo) => {
+      const hidden = $('input[type="hidden"]', combo);
+      const field = $('.combo__field', combo);
+      const pop = $('.combo__pop', combo);
+      const label = $('.combo__value', combo);
+      const search = $('.combo__search input', combo);
+      const list = $('.combo__list', combo);
+      const editable = combo.classList.contains('combo--editable');
+
+      const options = () => $$('.combo__opt', list).filter((o) => !o.hidden);
+
+      const commit = (value) => {
+        hidden.value = value;
+        label.textContent = value || combo.dataset.placeholder;
+        label.classList.toggle('is-empty', !value);
+        $$('.combo__opt', list).forEach((o) => {
+          const on = o.dataset.value === value;
+          o.classList.toggle('is-on', on);
+          o.setAttribute('aria-selected', on);
+        });
+        // The autosave layer listens for this on [data-key].
+        hidden.dispatchEvent(new Event('input', { bubbles: true }));
+        close();
+      };
+
+      const highlight = (el) => {
+        $$('.combo__opt', list).forEach((o) => o.classList.remove('is-active'));
+        if (el) {
+          el.classList.add('is-active');
+          el.scrollIntoView({ block: 'nearest' });
+        }
+      };
+
+      function open() {
+        closeAllCombos(combo);
+        pop.hidden = false;
+        combo.classList.add('is-open');
+        field.setAttribute('aria-expanded', 'true');
+        if (search) {
+          search.value = '';
+          filter('');
+          search.focus();
+        }
+        highlight($('.combo__opt.is-on', list) || options()[0]);
+      }
+
+      function close() {
+        pop.hidden = true;
+        combo.classList.remove('is-open');
+        field.setAttribute('aria-expanded', 'false');
+      }
+      combo._close = close;
+
+      function filter(term) {
+        const q = term.trim().toLowerCase();
+        let shown = 0;
+        $$('.combo__opt', list).forEach((o) => {
+          const hit = !q || o.dataset.value.toLowerCase().includes(q);
+          o.hidden = !hit;
+          if (hit) shown += 1;
+        });
+
+        // Offer the typed text itself when it is genuinely new.
+        let custom = $('.combo__custom', pop);
+        const exact = $$('.combo__opt', list).some((o) => o.dataset.value.toLowerCase() === q);
+        if (editable && q && !exact) {
+          if (!custom) {
+            custom = document.createElement('button');
+            custom.type = 'button';
+            custom.className = 'combo__opt combo__custom';
+            list.prepend(custom);
+          }
+          custom.dataset.value = term.trim();
+          custom.innerHTML = `<span class="combo__opt-label">Use “${esc(term.trim())}”</span>`;
+          custom.hidden = false;
+          shown += 1;
+        } else if (custom) {
+          custom.remove();
+        }
+
+        let empty = $('.combo__empty', pop);
+        if (!shown) {
+          if (!empty) {
+            empty = document.createElement('div');
+            empty.className = 'combo__empty';
+            empty.textContent = 'Nothing matches';
+            list.after(empty);
+          }
+        } else if (empty) {
+          empty.remove();
+        }
+        highlight(options()[0]);
+      }
+
+      field.onclick = () => (pop.hidden ? open() : close());
+
+      list.onclick = (e) => {
+        const opt = e.target.closest('.combo__opt');
+        if (opt) commit(opt.dataset.value);
+      };
+
+      if (search) {
+        search.addEventListener('input', () => filter(search.value));
+      }
+
+      const onKeys = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); field.focus(); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (pop.hidden) { open(); return; }
+          const items = options();
+          const at = items.indexOf($('.combo__opt.is-active', list));
+          const next = e.key === 'ArrowDown'
+            ? Math.min(items.length - 1, at + 1)
+            : Math.max(0, at - 1);
+          highlight(items[next]);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (pop.hidden) { open(); return; }
+          const active = $('.combo__opt.is-active', list) || options()[0];
+          if (active) commit(active.dataset.value);
+          else if (editable && search && search.value.trim()) commit(search.value.trim());
+        }
+      };
+      field.addEventListener('keydown', onKeys);
+      if (search) search.addEventListener('keydown', onKeys);
+    });
+  }
+
+  function closeAllCombos(except) {
+    $$('.combo.is-open').forEach((c) => { if (c !== except && c._close) c._close(); });
+  }
+
+  /* ============================================================
+     Name chips — several names in one field
+     ------------------------------------------------------------
+     Used for the three committee roles and for guests. The value is still the
+     comma-separated string the database and the spreadsheet export expect; only
+     the editing experience changes.
+     ============================================================ */
+  const XMARK = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+
+  const splitNames = (s) => String(s ?? '').split(',').map((n) => n.trim()).filter(Boolean);
+
+  function chipHtml(name, known) {
+    return `<span class="chip-name${known ? ' is-member' : ''}" data-name="${esc(name)}">
+        ${known ? `<span class="avatar">${esc(initials(name).toUpperCase())}</span>` : ''}
+        <span class="chip-name__text">${esc(name)}</span>
+        <button class="chip-name__x" type="button" data-drop="${esc(name)}" aria-label="Remove ${esc(name)}">${XMARK}</button>
+      </span>`;
+  }
+
+  function namesHtml(key, value, { suggest = false, placeholder = '' } = {}) {
+    const names = splitNames(value);
+    const roster = suggest ? committeeNames() : [];
+    return `
+      <div class="names" data-names="${esc(key)}" data-suggest="${suggest}">
+        <input type="hidden" data-key="${esc(key)}" value="${esc(names.join(', '))}">
+        <div class="names__box">
+          <span class="names__chips">${names.map((n) => chipHtml(n, roster.includes(n))).join('')}</span>
+          <input class="names__input" type="text" placeholder="${esc(placeholder)}" autocomplete="off" spellcheck="false" aria-label="Add a name">
+        </div>
+        ${suggest ? '<div class="names__pop" hidden role="listbox"></div>' : ''}
+      </div>`;
+  }
+
+  function initNames(root) {
+    $$('.names', root).forEach((box) => {
+      const hidden = $('input[type="hidden"]', box);
+      const chips = $('.names__chips', box);
+      const entry = $('.names__input', box);
+      const pop = $('.names__pop', box);
+      const suggest = box.dataset.suggest === 'true';
+
+      const current = () => splitNames(hidden.value);
+
+      const paint = () => {
+        const roster = suggest ? committeeNames() : [];
+        chips.innerHTML = current().map((n) => chipHtml(n, roster.includes(n))).join('');
+        $$('[data-drop]', chips).forEach((btn) => {
+          btn.onclick = (e) => { e.stopPropagation(); drop(btn.dataset.drop); };
+        });
+      };
+
+      const write = (names) => {
+        hidden.value = names.join(', ');
+        paint();
+        hidden.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+
+      const add = (raw) => {
+        const name = String(raw || '').trim().replace(/\s+/g, ' ');
+        if (!name) return;
+        const names = current();
+        // Same person twice helps nobody, whatever the casing.
+        if (names.some((n) => n.toLowerCase() === name.toLowerCase())) {
+          entry.value = '';
+          closePop();
+          return;
+        }
+        write([...names, name]);
+        entry.value = '';
+        closePop();
+      };
+
+      const drop = (name) => write(current().filter((n) => n !== name));
+
+      function closePop() {
+        if (pop) { pop.hidden = true; pop.innerHTML = ''; }
+      }
+
+      function openPop(term) {
+        if (!pop) return;
+        const taken = current().map((n) => n.toLowerCase());
+        const q = term.trim().toLowerCase();
+        const matches = committeeNames()
+          .filter((n) => !taken.includes(n.toLowerCase()))
+          .filter((n) => !q || n.toLowerCase().includes(q))
+          .slice(0, 8);
+
+        if (!matches.length) { closePop(); return; }
+        pop.innerHTML = matches.map((n) => `
+          <button class="names__opt" type="button" role="option" data-pick="${esc(n)}">
+            <span class="avatar">${esc(initials(n).toUpperCase())}</span>${esc(n)}
+          </button>`).join('');
+        pop.hidden = false;
+        $$('[data-pick]', pop).forEach((btn) => {
+          btn.onmousedown = (e) => { e.preventDefault(); add(btn.dataset.pick); };
+        });
+      }
+
+      entry.addEventListener('focus', () => openPop(entry.value));
+      entry.addEventListener('input', () => openPop(entry.value));
+      entry.addEventListener('blur', () => setTimeout(closePop, 120));
+
+      entry.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          add(entry.value);
+        } else if (e.key === 'Backspace' && !entry.value) {
+          const names = current();
+          if (names.length) write(names.slice(0, -1));
+        } else if (e.key === 'Escape') {
+          e.stopPropagation();
+          closePop();
+        }
+      });
+
+      // Losing focus should not quietly discard what was typed.
+      entry.addEventListener('blur', () => { if (entry.value.trim()) add(entry.value); });
+
+      $('.names__box', box).addEventListener('click', () => entry.focus());
+      paint();
+    });
+  }
+
   function fieldHtml(def) {
     const [key, label, type, hint = ''] = def;
     const value = state.current[key] ?? '';
     let control;
 
     if (type === 'select') {
-      const options = state.meta.types.length ? state.meta.types : ['Club Project'];
-      control = `<select data-key="${key}">${options
-        .map((o) => `<option value="${esc(o)}"${o === value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      control = comboHtml(key, value, state.meta.types.length ? state.meta.types : ['Club Project'],
+        { placeholder: 'Choose a type' });
     } else if (type === 'datalist') {
-      control = `<input data-key="${key}" list="dl-${key}" value="${esc(value)}" placeholder="Choose or type your own">
-        <datalist id="dl-${key}">${(state.meta.categories || []).map((o) => `<option value="${esc(o)}"></option>`).join('')}</datalist>`;
+      control = comboHtml(key, value, state.meta.categories || [],
+        { editable: true, placeholder: 'Choose or type your own' });
+    } else if (type === 'members') {
+      control = namesHtml(key, value, { suggest: true, placeholder: 'Pick or type a name…' });
+    } else if (type === 'names') {
+      control = namesHtml(key, value, { placeholder: 'Type a name and press Enter' });
     } else if (type === 'area') {
       control = `<textarea data-key="${key}" placeholder="${esc(hint)}">${esc(value)}</textarea>`;
     } else {
@@ -549,6 +861,8 @@
       </section>`;
 
     $('#detailBody').innerHTML = html;
+    initCombos($('#detailBody'));
+    initNames($('#detailBody'));
 
     $$('#picker button').forEach((btn) => {
       btn.onclick = () => {
@@ -907,9 +1221,10 @@
   }
 
   async function renderAdmin() {
-    const [projects, members] = await Promise.all([api.list(''), api.committee()]);
+    const [projects, members, catalog] = await Promise.all([api.list(''), api.committee(), api.catalog()]);
     state.projects = projects;
     state.meta.committee = members;
+    renderCatalog(catalog);
 
     $('#adminProjectCount').textContent = `${projects.length} project${projects.length === 1 ? '' : 's'}`;
     $('#adminMemberCount').textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
@@ -942,6 +1257,67 @@
     $$('#adminMembers [data-remove]').forEach((btn) => {
       btn.onclick = async () => { await removeMember(btn.dataset.remove); renderAdmin(); };
     });
+  }
+
+  /** Renders the two pick-lists in the admin panel. */
+  function renderCatalog(catalog) {
+    const optionHtml = (item) => `
+      <span class="opt" data-id="${esc(item.id)}">
+        ${esc(item.label)}
+        ${item.usageCount ? `<span class="opt__n" title="Used by ${item.usageCount} project${item.usageCount === 1 ? '' : 's'}">${item.usageCount}</span>` : ''}
+        <button class="opt__x" type="button" data-catalog="${esc(item.id)}" data-label="${esc(item.label)}" data-used="${item.usageCount}" aria-label="Remove ${esc(item.label)}">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </span>`;
+
+    $('#typeList').innerHTML = catalog.types.map(optionHtml).join('');
+    $('#categoryList').innerHTML = catalog.categories.map(optionHtml).join('');
+    $('#typeCount').textContent = `${catalog.types.length} option${catalog.types.length === 1 ? '' : 's'}`;
+    $('#categoryCount').textContent = `${catalog.categories.length} option${catalog.categories.length === 1 ? '' : 's'}`;
+
+    $$('#viewAdmin [data-catalog]').forEach((btn) => {
+      btn.onclick = () => removeCatalogItem(btn.dataset.catalog, btn.dataset.label, +btn.dataset.used);
+    });
+  }
+
+  async function removeCatalogItem(id, label, used) {
+    const ok = await confirmAction({
+      title: `Remove “${label}”?`,
+      text: 'It will no longer be offered on the project form.',
+      note: used
+        ? `${used} project${used === 1 ? ' is' : 's are'} using it. They keep the value — it just stops being an option for new work.`
+        : '',
+      confirmLabel: 'Remove option',
+    });
+    if (!ok) return;
+    try {
+      await api.removeCatalog(id);
+      toast(`“${label}” removed`);
+      await refreshMeta();
+      renderAdmin();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  async function addCatalogItem(kind, input) {
+    const label = input.value.trim();
+    if (!label) return;
+    try {
+      await api.addCatalog(kind, label);
+      input.value = '';
+      toast(`“${label}” added`);
+      await refreshMeta();
+      renderAdmin();
+    } catch (err) {
+      toast(err.message, 'error');
+      input.select();
+    }
+  }
+
+  /** Keeps the project form's pick-lists in step after a structure change. */
+  async function refreshMeta() {
+    try { state.meta = await api.meta(); } catch { /* keep what we have */ }
   }
 
   async function adminDeleteProject(id) {
@@ -1044,6 +1420,14 @@
 
     $('#adminBack').onclick = () => go('#/');
     $('#adminLogout').onclick = adminSignOut;
+    $('#typeForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      addCatalogItem('types', $('#typeInput'));
+    });
+    $('#categoryForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      addCatalogItem('categories', $('#categoryInput'));
+    });
     $('#adminForm').addEventListener('submit', submitAdminLogin);
     $('#adminCancel').onclick = () => $('#adminModal').close();
     $('#backBtn').onclick = () => go('#/');
@@ -1092,6 +1476,11 @@
         e.preventDefault();
         $('#search').focus();
       }
+    });
+
+    // one listener for every combo: click anywhere else and they all close
+    document.addEventListener('pointerdown', (e) => {
+      if (!e.target.closest('.combo')) closeAllCombos();
     });
 
     window.addEventListener('hashchange', route);

@@ -178,6 +178,40 @@
         <div class="adminlist" id="adminProjects"></div>
       </section>
 
+      <section class="panel">
+        <div class="panel__head">
+          <h2>Card structure</h2>
+          <span class="tag">shared by every project</span>
+        </div>
+        <p class="panel__lead">These are the options offered on the project form. Removing one only takes it off the list — projects already using it keep their value.</p>
+
+        <div class="catalog">
+          <div class="catalog__group">
+            <div class="catalog__head">
+              <h3>Project types</h3>
+              <span class="catalog__count" id="typeCount"></span>
+            </div>
+            <div class="chips chips--wrap" id="typeList"></div>
+            <form class="miniform" id="typeForm">
+              <input type="text" id="typeInput" placeholder="Add a project type" maxlength="80" autocomplete="off" aria-label="New project type">
+              <button class="btn btn--sm btn--primary" type="submit">Add</button>
+            </form>
+          </div>
+
+          <div class="catalog__group">
+            <div class="catalog__head">
+              <h3>Project categories</h3>
+              <span class="catalog__count" id="categoryCount"></span>
+            </div>
+            <div class="chips chips--wrap" id="categoryList"></div>
+            <form class="miniform" id="categoryForm">
+              <input type="text" id="categoryInput" placeholder="Add a category" maxlength="80" autocomplete="off" aria-label="New project category">
+              <button class="btn btn--sm btn--primary" type="submit">Add</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
       <section class="panel committee">
         <div class="panel__head">
           <h2>Committee</h2>

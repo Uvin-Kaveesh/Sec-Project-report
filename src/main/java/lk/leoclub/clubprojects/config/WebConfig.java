@@ -1,5 +1,7 @@
 package lk.leoclub.clubprojects.config;
 
+import java.util.Set;
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -26,8 +28,15 @@ public class WebConfig implements WebMvcConfigurer {
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new AdminGuard(admin))
+        // Deleting records: admins only. Adding and editing stay open.
+        registry.addInterceptor(new AdminGuard(admin, Set.of("DELETE"), AdminGuard.DELETE_MESSAGE))
                 .addPathPatterns("/api/projects/*", "/api/committee/*");
+
+        // The form's own structure — types and categories — is admin-only to
+        // change at all, since it affects every project card.
+        registry.addInterceptor(new AdminGuard(admin, Set.of("POST", "PUT", "DELETE"),
+                        AdminGuard.STRUCTURE_MESSAGE))
+                .addPathPatterns("/api/catalog/**");
     }
 
     /**

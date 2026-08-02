@@ -157,6 +157,29 @@ Some deliberate choices:
 - Server-side limits: 2 MB, and only JPEG, PNG, WebP or GIF. Deleting a project
   deletes its image too.
 
+## Card structure — types and categories
+
+The admin panel has a **Card structure** section for the two pick-lists on the
+project form. Add an option with the inline field; remove one with the **×** that
+appears on hover. The small number beside an option is how many projects use it.
+
+- **Changing these is admin-only** — including *adding*, not just deleting,
+  because both lists shape every project card. Non-admins get
+  "Only admins can change project types and categories."
+- **Removing is non-destructive.** Projects keep whatever value they were given;
+  the option simply stops being offered for new work. Because project type is a
+  dropdown, a retired value is still listed on projects using it — otherwise
+  opening such a project and editing any field would silently rewrite its type
+  to whichever option came first.
+- **The last option cannot be removed.** A form with an empty dropdown would be
+  unusable, so the final type or category is refused with a clear message.
+- Duplicates are rejected and spacing is normalised, so `"  Zone   Project "`
+  matches the existing `"Zone Project"`.
+
+The lists live in the `catalog_items` table and are seeded once from
+`Catalog.java` on first run. After that the database is the source of truth —
+editing `Catalog.java` will not change an existing installation.
+
 ## Managing the committee
 
 The committee panel on the home screen is editable. **Add member** opens an
@@ -234,6 +257,20 @@ shows the gap.
   capped at one connection to sidestep `SQLITE_BUSY` errors.
 - **Ids are UUID strings** assigned by the app rather than autoincrement
   integers, which keeps inserts simple across SQLite and any future database.
+- **Roles and guests are name chips, not free text.** Chairman, secretary and
+  treasurer offer the committee as you type — pick from the list, or type
+  someone who is not a member. Chief guests and other guests take any typed
+  name. Each name becomes a removable chip; committee members show their
+  initials so it is obvious who is from the club. The value is still stored as a
+  comma-separated string, so the database and the spreadsheet export are
+  unchanged and existing records load straight into chips.
+- **The dropdowns are custom, not native.** A `<select>` popup and `<datalist>`
+  suggestion list are drawn by the browser and ignore CSS completely, so they
+  never matched the rest of the page. Both are rebuilt in `app.js` as a combo
+  box: searchable, keyboard-driven (arrows, Enter, Escape), with a tick on the
+  current value. A hidden input carries the value, so the autosave layer did not
+  have to change. The category one still accepts free text — type anything and
+  press Enter.
 - **The frontend has no build step** — plain HTML, CSS and framework-free JS,
   served straight out of `static/`. Themes follow your OS by default and the
   choice is remembered in `localStorage`.

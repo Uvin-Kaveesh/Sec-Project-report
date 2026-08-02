@@ -8,10 +8,13 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import lk.leoclub.clubprojects.model.CatalogItem;
 import lk.leoclub.clubprojects.model.CommitteeMember;
 import lk.leoclub.clubprojects.model.Project;
+import lk.leoclub.clubprojects.repository.CatalogItemRepository;
 import lk.leoclub.clubprojects.repository.CommitteeMemberRepository;
 import lk.leoclub.clubprojects.repository.ProjectRepository;
+import lk.leoclub.clubprojects.service.Catalog;
 import lk.leoclub.clubprojects.service.ProjectStatus;
 
 /**
@@ -32,11 +35,29 @@ public class DataSeeder {
             "Rusara Sathnidu");
 
     @Bean
-    ApplicationRunner seed(CommitteeMemberRepository membersRepo, ProjectRepository projectsRepo) {
+    ApplicationRunner seed(CommitteeMemberRepository membersRepo, ProjectRepository projectsRepo,
+                           CatalogItemRepository catalogRepo) {
         return args -> {
+            seedCatalog(catalogRepo);
             seedCommittee(membersRepo);
             seedProjects(projectsRepo);
         };
+    }
+
+    /** Seeds the pick-lists once; after that admins own them. */
+    private void seedCatalog(CatalogItemRepository repo) {
+        if (repo.countByKind(CatalogItem.TYPE) == 0) {
+            for (int i = 0; i < Catalog.TYPES.size(); i++) {
+                repo.save(new CatalogItem(CatalogItem.TYPE, Catalog.TYPES.get(i), i));
+            }
+            log.info("Seeded {} project types", Catalog.TYPES.size());
+        }
+        if (repo.countByKind(CatalogItem.CATEGORY) == 0) {
+            for (int i = 0; i < Catalog.CATEGORIES.size(); i++) {
+                repo.save(new CatalogItem(CatalogItem.CATEGORY, Catalog.CATEGORIES.get(i), i));
+            }
+            log.info("Seeded {} project categories", Catalog.CATEGORIES.size());
+        }
     }
 
     private void seedCommittee(CommitteeMemberRepository repo) {

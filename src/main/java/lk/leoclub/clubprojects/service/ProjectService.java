@@ -25,7 +25,7 @@ public class ProjectService {
             { "category", "Project Category" },
             { "status", "Status" },
             { "startDate", "Start date" },
-            { "dueDate", "Due date" },
+            { "dueDate", "End date" },
             { "duration", "Service Hours (Project Duration)" },
             { "venue", "Venue" },
             { "chair", "Project Chairman(s)" },
